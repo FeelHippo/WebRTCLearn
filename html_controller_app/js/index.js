@@ -95,7 +95,7 @@ const setUpLocalConnection = (socket) => {
     });
 
     localConnection.addEventListener('connectionstatechange', event => {
-        if (peerConnection.connectionState === 'connected') {
+        if (localConnection.connectionState === 'connected') {
             console.log('~~~ Peers connected ~~~');
         }
     });
