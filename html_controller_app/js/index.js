@@ -12,7 +12,7 @@ const dataChannelReceive = document.getElementById('reset');
 dataChannelSend.onclick = () => {
     const data = dataChannelValue.value;
     console.log('~~~ Sending Data: ' + data);
-    sendChannel.send({ name: 'firstOperand', value: data });
+    sendChannel.send(JSON.stringify({ name: 'message', value: data }));
 };
 dataChannelReceive.onclick = () => {
     console.warn('~~~ Resetting Data ~~~');
@@ -20,35 +20,34 @@ dataChannelReceive.onclick = () => {
   };
 
 window.onload = () => {
-    console.info('~~~ INIT ~~~');
-    const socket = io('http://localhost:3030', { auth: { token: 'SIGNALING123' } });
-
-    // to connect two remote clients:
-    // https://webrtc.org/getting-started/peer-connections
-
-    connectToSignalingChannel(socket);
-
-    setUpLocalConnection(socket);
-    setUpRemoteConnection();
-
-    localConnection.createOffer().then(
-        gotDescription1,
-        onCreateSessionDescriptionError
-    );
-
-    console.info('~~~ OK ~~~');
-
+    try {
+        console.info('~~~ INIT ~~~');
+        const socket = io('http://localhost:3030', { auth: { token: 'SIGNALING123' } });
+    
+        // to connect two remote clients:
+        // https://webrtc.org/getting-started/peer-connections
+    
+        connectToSignalingChannel(socket);
+    
+        setUpLocalConnection(socket);
+        // setUpRemoteConnection();
+    
+        console.info('~~~ OK ~~~');
+    } catch (error) {
+        console.error(error);
+    }
 }
 
 const connectToSignalingChannel = (socket) => {
     if (socket) {
         socket.on(
             'connect',
-            () => socket.emit("ready", 'DevFilipposMacBookProlocalClient', 'admin'),
+            () => socket.emit("ready", 'DevFilipposMacBookProlocalClient' + new Date().toISOString(), 'admin'),
         );
         socket.connect();
         socket.on('message', async (message) => {
             // here we receive the connection offer from the calling peer 
+            console.log('~~~ MESSAGE RECEIVED: ' + message);
             if (message.offer) {
                 console.log(`~~~ Message Received: OFFER`);
                 localConnection.setRemoteDescription(new RTCSessionDescription(message.offer));
@@ -57,15 +56,16 @@ const connectToSignalingChannel = (socket) => {
                 // #2 the receiving peer returns an answer
                 socket.send({ 'answer': answer });
             }
-            if (message.iceCandidate) {
-                console.log(`~~~ Message Received: iceCandidate`);
+            if (message.icecandidate) {
+                console.log(`~~~ Message Received: icecandidate`);
                 try {
                     await localConnection.addIceCandidate(message.iceCandidate);
                 } catch (e) {
                     console.error('Error adding received ice candidate', e);
                 }
             }
-        })
+        });
+        sendChannel = socket;
     }
 }
 
@@ -75,21 +75,26 @@ const setUpLocalConnection = (socket) => {
     var peerConfiguration = {};
 
     (async() => {
-    const response = await fetch("https://yourappname.metered.live/api/v1/turn/credentials?apiKey=W6WKeOdumE0fIEmey1j47we_ZLgwai92zPwYAnMNmOFF2aBE");
-    const iceServers = await response.json();
-    peerConfiguration.iceServers = iceServers
+        const response = await fetch("https://yourappname.metered.live/api/v1/turn/credentials?apiKey=W6WKeOdumE0fIEmey1j47we_ZLgwai92zPwYAnMNmOFF2aBE");
+        const iceServers = await response.json();
+        peerConfiguration.iceServers = iceServers
     })();
 
     window.localConnection = localConnection = new RTCPeerConnection(peerConfiguration);
-    console.info(`~~~ ${localConnection.currentLocalDescription} ~~~`);
+    console.info(`~~~ Connection Created: ${localConnection.currentLocalDescription} ~~~`);
+    
+    localConnection.createOffer().then(
+        emitOffer,
+        onCreateSessionDescriptionError
+    );
 
-    sendChannel = localConnection.createDataChannel('sendDataChannel');
-    console.info(`~~~ ${sendChannel.label} ~~~`);
+    // sendChannel = localConnection.createDataChannel('sendDataChannel');
+    // console.info(`~~~ sendChannel label: ${sendChannel.label} ~~~`);
 
     localConnection.addEventListener('icecandidate', iceEvent => {
-        console.info('~~~ icecandidate ~~~', + iceEvent.candidate);
-        if (iceEvent.candidate) {
-            socket.send({'iceCandidate': iceEvent.candidate});
+        if (!!iceEvent.candidate) {
+            console.info('~~~ addEventListener icecandidate: ' + iceEvent.candidate);
+            socket.send({'icecandidate': iceEvent.candidate});
             onIceCandidate(localConnection, iceEvent);
         }
     });
@@ -100,22 +105,22 @@ const setUpLocalConnection = (socket) => {
         }
     });
 
-    sendChannel.onopen = onSendChannelStateChange;
-    sendChannel.onclose = onSendChannelStateChange;
+    // sendChannel.onopen = onSendChannelStateChange;
+    // sendChannel.onclose = onSendChannelStateChange;
 
 }
 
-const setUpRemoteConnection = () => {
+// const setUpRemoteConnection = () => {
 
-    window.remoteConnection = remoteConnection = new RTCPeerConnection(undefined);
-    console.info(`~~~ ${remoteConnection.currentRemoteDescription} ~~~`);
+//     window.remoteConnection = remoteConnection = new RTCPeerConnection(undefined);
+//     console.info(`~~~ ${remoteConnection.currentRemoteDescription} ~~~`);
 
-    remoteConnection.onicecandidate = iceEvent => {
-        onIceCandidate(remoteConnection, iceEvent);
-    }
-    remoteConnection.ondatachannel = receiveChannelCallback;
+//     remoteConnection.onicecandidate = iceEvent => {
+//         onIceCandidate(remoteConnection, iceEvent);
+//     }
+//     remoteConnection.ondatachannel = receiveChannelCallback;
 
-}
+// }
 
 const onIceCandidate = (client, iceEvent) => {
     const otherClient = client === localConnection
@@ -124,15 +129,15 @@ const onIceCandidate = (client, iceEvent) => {
     otherClient
         .addIceCandidate(iceEvent.candidate)
         .then(
-            console.info('~~~ added candidate ~~~' + iceEvent.candidate),
+            console.info('~~~ added candidate ~~~' + iceEvent.candidate), 
             console.error
         );
 }
 
-const onSendChannelStateChange = () => {
-    const readyState = sendChannel.readyState;
-    console.info(`~~~ ${readyState} ~~~`);
-}
+// const onSendChannelStateChange = () => {
+//     const readyState = sendChannel.readyState;
+//     console.info(`~~~ ${readyState} ~~~`);
+// }
 
 const receiveChannelCallback = (iceEvent) => {
     console.warn(`~~~ Callback ${iceEvent} ~~~`);
@@ -143,7 +148,7 @@ const receiveChannelCallback = (iceEvent) => {
 }
 
 const onReceiveMessageCallback = (iceEvent) => {
-    console.log(`~~~~ Message: ${iceEvent.data} ~~~`);
+    console.log(`~~~~ Message: ${iceEvent.type} ~~~`);
 }
 
 const onReceiveChannelStateChange = () => {
@@ -151,20 +156,21 @@ const onReceiveChannelStateChange = () => {
     console.log(`~~~ ${readyState} ~~~`);
 }
 
-const gotDescription1 = (desc) => {
-    localConnection.setLocalDescription(desc);
-    console.log(`~~~ ${desc.sdp} ~~~`);
-    remoteConnection.setRemoteDescription(desc);
+const emitOffer = (offer) => {
+    sendChannel.emit('offer', (offer));
+    localConnection.setLocalDescription(offer);
+    console.log(`~~~ ${offer.sdp} ~~~`);
+    remoteConnection.setRemoteDescription(offer);
     remoteConnection.createAnswer().then(
-        gotDescription2,
+        updateDescription,
         onCreateSessionDescriptionError
     );
 }
   
-const gotDescription2 = (desc) => {
-    remoteConnection.setLocalDescription(desc);
-    console.log(`~~~ ${desc.sdp} ~~~`);
-    localConnection.setRemoteDescription(desc);
+const updateDescription = (offer) => {
+    remoteConnection.setLocalDescription(offer);
+    console.log(`~~~ ${offer.sdp} ~~~`);
+    localConnection.setRemoteDescription(offer);
 }
 
 const onCreateSessionDescriptionError = (error) => {
