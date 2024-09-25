@@ -89,11 +89,14 @@ const connectToSignalingChannel = (socket) => {
 
 const setUpLocalConnection = (socket) => {
 
-    // https://dashboard.metered.ca/developers/app/66817ac534ec0778f267fa61
+    // https://dashboard.metered.ca/developers/app/66f41edbe1d5af10c7f1f126
     var peerConfiguration = {};
 
+    // TURN (Traversal Using Relay NAT) open source Server
+    // credentials have a limited life span, if the request fails (401) => generate new ones
     (async() => {
-        const response = await fetch("https://yourappname.metered.live/api/v1/turn/credentials?apiKey=W6WKeOdumE0fIEmey1j47we_ZLgwai92zPwYAnMNmOFF2aBE");
+        // https://www.metered.ca/docs/turn-rest-api/get-credential/
+        const response = await fetch("https://feelhippo.metered.live/api/v1/turn/credentials?apiKey=8mjy59xrP4_4jjTy1NVqtAFNstsxdi7Ljdg2VNf85KHdWtoy");
         const iceServers = await response.json();
         peerConfiguration.iceServers = iceServers
     })();

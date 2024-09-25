@@ -1,0 +1,2 @@
+- run server `node signaling_server/server.js`
+- run clients from browser `<path to repo>/WebRTC/html_controller_app/index.html`
