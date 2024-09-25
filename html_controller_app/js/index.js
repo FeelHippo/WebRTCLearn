@@ -1,7 +1,6 @@
 'use strict';
 
 let localConnection;
-let remoteConnection;
 let sendChannel;
 let receiveChannel;
 
@@ -38,6 +37,9 @@ window.onload = () => {
     }
 }
 
+// ICE == Internet Connectivity Establishment
+// Signaling is needed in order for two peers to share how they should connect
+// this is done via an ICE (signaling) server
 const connectToSignalingChannel = (socket) => {
     if (socket) {
         socket.on(
@@ -50,13 +52,17 @@ const connectToSignalingChannel = (socket) => {
             ),
         );
         socket.connect();
+        // https://webrtc.org/getting-started/peer-connections#signaling
         socket.on('message', async (message) => {
             // here we receive the connection offer from the calling peer 
             console.log(`|-- MESSAGE RECEIVED: ${message}`);
+            // #5 on the receiving side, we wait for an incoming offer
             if (message.offer) {
                 console.log(`|-- Offer Received`);
+                // #6 set the received offer
                 localConnection.setRemoteDescription(new RTCSessionDescription(message.offer));
                 console.log(`|-- Emit Answer`);
+                // #7 create an answer to the received offer
                 const answer = await localConnection.createAnswer();
                 await localConnection.setLocalDescription(answer);
                 // the calling peer returns an answer
@@ -64,7 +70,10 @@ const connectToSignalingChannel = (socket) => {
             }
             if (message.answer) {
                 console.log(`|-- Peer Answer to Offer ${message}`);
+                const remoteDescription = new RTCSessionDescription(message.answer);
+                localConnection.setRemoteDescription(remoteDescription);
             }
+            // #9 listen for remote ICE candidates and add them to the local RTCPeerConnection
             if (message.icecandidate) {
                 console.log(`|-- Ice Candidate Received`);
                 try {
@@ -89,14 +98,22 @@ const setUpLocalConnection = (socket) => {
         peerConfiguration.iceServers = iceServers
     })();
 
+    // #1 define how the peer connection is set up
     window.localConnection = localConnection = new RTCPeerConnection(peerConfiguration);
     console.info(`|-- Connection Created: ${localConnection.currentLocalDescription}`);
     
+    // #2 create an SDP offer
     localConnection.createOffer().then(
         emitOffer,
         onCreateSessionDescriptionError
     );
 
+    // https://webrtc.org/getting-started/peer-connections#trickle_ice
+    // signals in what state the ICE gathering is (new, gathering or complete)
+    localConnection.addEventListener('icegatheringstatechange', console.info);
+
+    // #8  use a "trickle ice" technique and transmit each ICE candidate to the remote peer as it gets discovered
+    // Listen for local ICE candidates on the local RTCPeerConnection
     localConnection.addEventListener('icecandidate', iceEvent => {
         if (!!iceEvent.candidate) {
             console.info(`|-- Ice Candidate Event: ${iceEvent.candidate}`);
@@ -136,21 +153,11 @@ const onReceiveChannelStateChange = () => {
 }
 
 const emitOffer = (offer) => {
-    // here we emit the connection offer as the calling peer
+    // #3 here we emit the connection offer as the calling peer
     sendChannel.emit('offer', (offer));
+    // #4 session description is set as the local description
     localConnection.setLocalDescription(offer);
     console.log(`|-- ${offer.sdp}`);
-    remoteConnection.setRemoteDescription(offer);
-    remoteConnection.createAnswer().then(
-        updateDescription,
-        onCreateSessionDescriptionError
-    );
-}
-  
-const updateDescription = (offer) => {
-    remoteConnection.setLocalDescription(offer);
-    console.log(`|-- ${offer.sdp}`);
-    localConnection.setRemoteDescription(offer);
 }
 
 const onCreateSessionDescriptionError = (error) => {
