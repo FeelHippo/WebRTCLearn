@@ -6,17 +6,13 @@ let receiveChannel;
 
 const textInputElement = document.getElementById('value');
 const buttonInputElement = document.getElementById('result');
-const buttonInputResetElement = document.getElementById('reset');
+const spanContentElement = document.getElementById('content');
 
 buttonInputElement.onclick = () => {
     const data = textInputElement.value;
     console.log(`|-- Sending Data: ${data}`);
     sendChannel.send(JSON.stringify({ name: 'message', value: data }));
 };
-buttonInputResetElement.onclick = () => {
-    console.warn('|-- Resetting Data');
-    textInputElement.value = ''
-  };
 
 window.onload = () => {
     try {
@@ -80,6 +76,14 @@ const connectToSignalingChannel = (socket) => {
                     await localConnection.addIceCandidate(message.iceCandidate);
                 } catch (e) {
                     console.error('Error adding received ice candidate', e);
+                }
+            }
+            if (typeof message == 'string') {
+                // #10 use the value received from the message
+                const parsedMessage = JSON.parse(message);
+                if (parsedMessage.value) {
+                    const textNode = document.createTextNode(parsedMessage.value);
+                    spanContentElement.appendChild(textNode);
                 }
             }
         });
